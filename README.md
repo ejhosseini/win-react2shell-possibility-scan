@@ -1,10 +1,3 @@
-# win-react2shell-possibility-scan
-
-Here is a clean, professional **English version** you can use directly in your GitHub README.md.
-I’ve kept it structured, concise, and suitable for a public repo.
-
----
-
 # React2Shell (CVE-2025-55182) – Overview & Detection Guide
 
 ## What is React2Shell?
@@ -267,12 +260,3 @@ Invoke-Command -ComputerName $servers -FilePath .\Check-RSCIndicators.ps1 |
   * Whether patched versions are deployed
 * Perform full vulnerability assessment
 
----
-
-If you'd like, I can also generate:
-
-✔ A matching **LICENSE file**
-✔ A polished **README header banner**
-✔ A short **“TL;DR”** for the top of the repo
-
-Just tell me!
