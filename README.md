@@ -141,8 +141,12 @@ This repository does **not** include PoCs—only **detection heuristics**.
 
 This script performs **heuristic detection** of servers that *might* be running React Server Components or Next.js App Router workloads.
 
-It does **not** guarantee vulnerability status.
-It helps operations teams **identify candidate servers** for deeper investigation.
+> ⚠️ **Important:**  
+> - It does **not** guarantee that a system is free from vulnerabilities.  
+> - Even if the script does not find any indicators, this is **not a confirmation of safety**.  
+> - Each application owner is responsible for verifying whether vulnerable components are used in their codebase and taking appropriate remediation steps.
+
+The script is intended to help operations teams **identify candidate servers** for deeper investigation, not to provide a definitive security assessment.
 
 ---
 
