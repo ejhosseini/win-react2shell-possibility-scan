@@ -104,7 +104,10 @@ function Get-JsRuntimeInfo {
         }
     }
 
-    $installed = $installedCli + $installedReg
+    # Combine CLI and registry hits safely even when either side is $null
+    $installed = @()
+    if ($installedCli) { $installed += $installedCli }
+    if ($installedReg) { $installed += $installedReg }
 
     if ($installed.Count -gt 0) {
         Write-Host "Detected runtimes / CLI (PATH and registry):" -ForegroundColor Yellow
@@ -416,6 +419,23 @@ if ($hasRuntime -or $hasRscApp -or $hasPort) {
 else {
     Write-Host "No obvious indicators that this server runs React Server Components or Next.js." -ForegroundColor Green
     Write-Host "Note: RSC may still exist on other servers (containers, internal backends) that this host talks to indirectly." -ForegroundColor DarkYellow
+}
+
+# Summarize detected Node / JS runtimes with visible paths for quick review
+if ($runtimeInfo.InstalledRuntimes.Count -gt 0) {
+    Write-Host ""; Write-Host "Installed runtimes (including Node.js paths):" -ForegroundColor Cyan
+    $runtimeInfo.InstalledRuntimes |
+        Select-Object Runtime, Source, Path, DisplayVersion |
+        Sort-Object Runtime, Source |
+        Format-Table -AutoSize
+} else {
+    Write-Host ""; Write-Host "No installed runtimes (node, bun, deno, pm2) detected." -ForegroundColor Yellow
+}
+
+# Highlight any running runtime processes for visibility
+if ($runtimeInfo.RuntimeProcesses.Count -gt 0) {
+    Write-Host ""; Write-Host "Active runtime processes:" -ForegroundColor Cyan
+    $runtimeInfo.RuntimeProcesses | Format-Table -AutoSize
 }
 
 # Return structured data for further processing if needed
