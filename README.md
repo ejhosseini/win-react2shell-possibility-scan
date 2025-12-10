@@ -264,3 +264,30 @@ Invoke-Command -ComputerName $servers -FilePath .\Check-RSCIndicators.ps1 |
   * Whether patched versions are deployed
 * Perform full vulnerability assessment
 
+
+## 📚 Recommended Reading & References
+
+A curated list of high-quality resources related to React2Shell, React Server Components (RSC), Next.js security, and related exploitation/patching details.
+
+### 🔥 React2Shell Vulnerability (CVE-2025-55182 & CVE-2025-66478)
+
+- **JFrog Security Research – Full Technical Breakdown**  
+  https://jfrog.com/blog/2025-55182-and-2025-66478-react2shell-all-you-need-to-know/
+
+- **Bitdefender Advisory – Exploitation in the Wild**  
+  https://businessinsights.bitdefender.com/advisory-react2shell-critical-unauthenticated-rce-in-react-cve-2025-55182
+
+- **The Hacker News – CISA Adds React2Shell to KEV**  
+  https://thehackernews.com/2025/12/critical-react2shell-flaw-added-to-cisa.html
+
+  ### 🧪 Detection, Security Operations & Mitigation Guidance
+
+  - **Official Security Advisory (CVE-2025-55182 / “React2Shell”)**  
+  https://react.dev/blog/2025/12/03/critical-security-vulnerability-in-react-server-components :contentReference[oaicite:5]{index=5}
+
+- **Sysdig Security Blog – Detecting React2Shell**  
+  https://www.sysdig.com/blog/detecting-react2shell :contentReference[oaicite:5]{index=5}
+
+- **Checkmarx Analysis – React2Shell: Deserialization to Remote Code Execution in React & Next.js**  
+  https://checkmarx.com/zero-post/react2shell-cve-2025-55182-deserialization-to-remote-code-execution-in-react-and-next-js/ :contentReference[oaicite:6]{index=6}
+
