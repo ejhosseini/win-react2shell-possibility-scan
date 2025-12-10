@@ -1,25 +1,63 @@
+<#
+.SYNOPSIS
+    Heuristic detector for possible React Server Components (RSC) / Next.js usage on a Windows server.
+
+.DESCRIPTION
+    This script looks for indicators that a server might be running React Server Components / Next.js,
+    which are relevant for assessing exposure to the React2Shell vulnerability (CVE-2025-55182).
+
+    It checks:
+      1. Installed JS runtimes/CLI: node, bun, deno, pm2
+      2. Running processes: node.exe, bun.exe, deno.exe, pm2.exe (incl. parent process)
+      3. package.json files under common web roots and scans for:
+         - next
+         - react / react-dom
+         - react-server-dom-* (RSC packages)
+         - waku (example RSC framework)
+         - .next directory
+         - app directory (Next.js App Router)
+         - next.config.js/mjs/ts
+         - any occurrences of "react-server-dom" text
+      4. Listening ports that commonly indicate Next.js-style apps (3000, 3001, 3002, 3003, 4000, 4001, 8000, 8080)
+      5. Established connections to other servers on those ports.
+
+    NOTE:
+      - This is heuristic only. It does NOT prove a server is vulnerable or exploited.
+      - Use it to find candidate servers / apps for deeper inspection (version checks, code review, dev confirmation).
+
+.PARAMETER SearchRoots
+    Root directories to scan for package.json and RSC/Next indicators.
+
+.PARAMETER NextStylePorts
+    Ports often used by Next.js / Node dev/prod servers.
+
+.OUTPUTS
+    Writes human-readable output to the console and returns a PSCustomObject with all collected data.
+
+#>
+
 param(
-    # Kataloger där webb-/app-kod brukar ligga
+    # Directories where web/app code typically resides
     [string[]]$SearchRoots = @(
         "C:\inetpub",
         "D:\web",
         "D:\sites"
     ),
 
-    # "Typiska" Next.js-portar (dev/prod): justera efter behov
+    # "Typical" Next.js-style ports (dev/prod) – adjust to your environment
     [int[]]$NextStylePorts = @(3000,3001,3002,3003,4000,4001,8000,8080)
 )
 
-Write-Host "=== React Server Components / Next.js - Indikatorcheck på $env:COMPUTERNAME ===" -ForegroundColor Cyan
+Write-Host "=== React Server Components / Next.js - Indicator Check on $env:COMPUTERNAME ===" -ForegroundColor Cyan
 Write-Host ""
 
 # -----------------------------
-# 1) Kolla JS-runtimes: Node, Bun, Deno, pm2
+# 1) JS runtimes: Node, Bun, Deno, pm2
 # -----------------------------
 function Get-JsRuntimeInfo {
-    Write-Host "== 1) JS-runtimes (Node / Bun / Deno / pm2) – installerade & processer ==" -ForegroundColor Green
+    Write-Host "== 1) JS runtimes (Node / Bun / Deno / pm2) – installed & running ==" -ForegroundColor Green
 
-    # Kommandon vi vill hitta i PATH
+    # Commands to look for in PATH
     $runtimeNames = @("node","bun","deno","pm2")
     $installed = @()
     foreach ($name in $runtimeNames) {
@@ -33,21 +71,21 @@ function Get-JsRuntimeInfo {
     }
 
     if ($installed.Count -gt 0) {
-        Write-Host "Installerade runtimes/CLI (enligt PATH):" -ForegroundColor Yellow
+        Write-Host "Detected runtimes/CLI in PATH:" -ForegroundColor Yellow
         $installed | Format-Table -AutoSize
     } else {
-        Write-Host "Inga runtimes/CLI hittades via PATH (node/bun/deno/pm2)." -ForegroundColor Yellow
+        Write-Host "No runtimes/CLI found via PATH (node/bun/deno/pm2)." -ForegroundColor Yellow
     }
 
     Write-Host ""
 
-    # Processer + parent process
+    # Processes + parent process
     $procNames = @("node.exe","bun.exe","deno.exe","pm2.exe")
     $procs = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
              Where-Object { $_.Name -in $procNames }
 
     if ($procs) {
-        Write-Host "Aktiva runtime-/pm2-processer:" -ForegroundColor Yellow
+        Write-Host "Active runtime/pm2 processes:" -ForegroundColor Yellow
         foreach ($p in $procs) {
             $parent = $null
             try {
@@ -63,7 +101,7 @@ function Get-JsRuntimeInfo {
             }
         } | Format-Table -AutoSize
     } else {
-        Write-Host "Inga aktiva node/bun/deno/pm2-processer hittades." -ForegroundColor Yellow
+        Write-Host "No active node/bun/deno/pm2 processes found." -ForegroundColor Yellow
     }
 
     Write-Host ""
@@ -74,29 +112,29 @@ function Get-JsRuntimeInfo {
 }
 
 # -----------------------------
-# 2) Kolla efter RSC/Next-indikatorer i filer
+# 2) File indicators – package.json, RSC/Next markers
 # -----------------------------
 function Get-RscFileIndicators {
     param(
         [string[]]$Roots
     )
 
-    Write-Host "== 2) Filindikatorer (package.json, react-server-dom-*, next, .next, app/) ==" -ForegroundColor Green
+    Write-Host "== 2) File indicators (package.json, react-server-dom-*, next, .next, app/) ==" -ForegroundColor Green
 
     $results = @()
 
     foreach ($root in $Roots) {
         if (-not (Test-Path $root)) {
-            Write-Host "Hoppar över saknad path: $root" -ForegroundColor DarkYellow
+            Write-Host "Skipping missing path: $root" -ForegroundColor DarkYellow
             continue
         }
 
-        Write-Host "Söker package.json under $root ..." -ForegroundColor Cyan
+        Write-Host "Searching for package.json under $root ..." -ForegroundColor Cyan
 
         try {
             $pkgFiles = Get-ChildItem -Path $root -Recurse -Filter "package.json" -ErrorAction SilentlyContinue
         } catch {
-            Write-Host "  Kunde inte läsa $root : $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host "  Could not enumerate $root : $($_.Exception.Message)" -ForegroundColor Red
             continue
         }
 
@@ -105,7 +143,7 @@ function Get-RscFileIndicators {
             try {
                 $json = Get-Content $pkg.FullName -Raw | ConvertFrom-Json
             } catch {
-                Write-Host "  Varning: kunde inte tolka $($pkg.FullName) som JSON." -ForegroundColor DarkYellow
+                Write-Host "  Warning: could not parse $($pkg.FullName) as JSON." -ForegroundColor DarkYellow
                 continue
             }
 
@@ -139,7 +177,7 @@ function Get-RscFileIndicators {
                         $rscPackages += "$($d.Name)=$($d.Value)"
                     }
                     "waku" {
-                        # Exempel på annat RSC-ramverk
+                        # Example of another RSC-capable framework
                         $hasRsc = $true
                         $rscPackages += "$($d.Name)=$($d.Value)"
                     }
@@ -153,7 +191,7 @@ function Get-RscFileIndicators {
                             (Test-Path (Join-Path $appRoot "next.config.mjs")) -or
                             (Test-Path (Join-Path $appRoot "next.config.ts"))
 
-            # Sök efter "react-server-dom" i appRoot (snäv scope)
+            # Search for "react-server-dom" text within the app root (narrow scope)
             $textHit = $null
             try {
                 $textHit = Select-String -Path (Join-Path $appRoot "*") -Pattern "react-server-dom" -Recurse -ErrorAction SilentlyContinue |
@@ -165,13 +203,13 @@ function Get-RscFileIndicators {
             if ($hasNext -or $hasRsc -or $hasNextBuild -or $hasTextRsc) {
                 $risk =
                     if ($hasRsc -or $hasTextRsc) {
-                        "Hög (RSC-indikation: react-server-dom-* eller textträff)"
+                        "High (RSC indication: react-server-dom-* or text hit)"
                     } elseif ($hasNextBuild -and $hasNext) {
-                        "Medel (Next + .next – kolla App Router / versioner)"
+                        "Medium (Next + .next – verify App Router and versions)"
                     } elseif ($hasNext) {
-                        "Behöver kontroll (Next-dependency)"
+                        "Needs review (Next dependency present)"
                     } else {
-                        "Indikation (React-bygge, troligen SPA)"
+                        "Low indication (React build – likely SPA)"
                     }
 
                 $obj = [PSCustomObject]@{
@@ -197,12 +235,12 @@ function Get-RscFileIndicators {
     }
 
     if ($results.Count -gt 0) {
-        Write-Host "`nPotentiella RSC/Next-appar hittades:" -ForegroundColor Yellow
+        Write-Host "`nPotential RSC/Next apps detected:" -ForegroundColor Yellow
         $results |
             Sort-Object RiskLevel, AppRoot |
             Format-Table AppRoot, HasNext, NextVersion, HasRscPackages, RscPackages, HasAppDir, HasNextBuild, RiskLevel -AutoSize
     } else {
-        Write-Host "Inga tydliga indikatorer på Next/RSC hittades under angivna rötter." -ForegroundColor Yellow
+        Write-Host "No clear Next/RSC indicators found under the specified roots." -ForegroundColor Yellow
     }
 
     Write-Host ""
@@ -210,17 +248,17 @@ function Get-RscFileIndicators {
 }
 
 # -----------------------------
-# 3) Portar: lokala lyssningar på "Next-typiska" portar
+# 3) Local listening ports – Next.js-style ports
 # -----------------------------
 function Get-NextStyleLocalPorts {
     param(
         [int[]]$Ports
     )
 
-    Write-Host "== 3) Lyssnande portar typiska för Next.js (heuristik) ==" -ForegroundColor Green
+    Write-Host "== 3) Listening ports commonly used by Next.js (heuristic) ==" -ForegroundColor Green
 
     if (-not (Get-Command Get-NetTCPConnection -ErrorAction SilentlyContinue)) {
-        Write-Host "Get-NetTCPConnection finns inte – hoppar över port-analys." -ForegroundColor Yellow
+        Write-Host "Get-NetTCPConnection not available – skipping port analysis." -ForegroundColor Yellow
         return @()
     }
 
@@ -243,29 +281,29 @@ function Get-NextStyleLocalPorts {
             }
         }
 
-        Write-Host "Lyssnande 'Next-typiska' portar:" -ForegroundColor Yellow
+        Write-Host "Listening on Next-like ports:" -ForegroundColor Yellow
         $out | Sort-Object LocalPort, ProcessName | Format-Table -AutoSize
         Write-Host ""
         return $out
     } else {
-        Write-Host "Inga lyssnande portar på $($Ports -join ', ') hittades." -ForegroundColor Yellow
+        Write-Host "No listeners found on ports: $($Ports -join ', ')." -ForegroundColor Yellow
         Write-Host ""
         return @()
     }
 }
 
 # -----------------------------
-# 4) Aktiva anslutningar till andra servrar på "Next-portar"
+# 4) Established connections to other servers on Next-like ports
 # -----------------------------
 function Get-NextStyleRemoteConnections {
     param(
         [int[]]$Ports
     )
 
-    Write-Host "== 4) Befintliga anslutningar mot andra servrar på Next-liknande portar ==" -ForegroundColor Green
+    Write-Host "== 4) Established connections to other servers on Next-like ports ==" -ForegroundColor Green
 
     if (-not (Get-Command Get-NetTCPConnection -ErrorAction SilentlyContinue)) {
-        Write-Host "Get-NetTCPConnection finns inte – hoppar över anslutnings-analys." -ForegroundColor Yellow
+        Write-Host "Get-NetTCPConnection not available – skipping connection analysis." -ForegroundColor Yellow
         return @()
     }
 
@@ -293,39 +331,39 @@ function Get-NextStyleRemoteConnections {
             }
         }
 
-        Write-Host "Aktiva anslutningar till $($Ports -join ', ') på andra servrar:" -ForegroundColor Yellow
+        Write-Host "Active connections to Next-like ports on remote servers:" -ForegroundColor Yellow
         $out | Sort-Object RemoteAddress, RemotePort | Format-Table -AutoSize
         Write-Host ""
         return $out
     } else {
-        Write-Host "Inga aktiva anslutningar mot Next-liknande portar hittades." -ForegroundColor Yellow
+        Write-Host "No active connections to Next-like ports were found." -ForegroundColor Yellow
         Write-Host ""
         return @()
     }
 }
 
 # -----------------------------
-# Kör alla steg och samla resultat
+# Execute all checks and summarize
 # -----------------------------
 $runtimeInfo    = Get-JsRuntimeInfo
 $fileIndicators = Get-RscFileIndicators -Roots $SearchRoots
 $localPorts     = Get-NextStyleLocalPorts -Ports $NextStylePorts
 $remoteConns    = Get-NextStyleRemoteConnections -Ports $NextStylePorts
 
-Write-Host "=== Sammanfattning (heuristisk) ===" -ForegroundColor Cyan
+Write-Host "=== Summary (heuristic only) ===" -ForegroundColor Cyan
 
 $hasRuntime = ($runtimeInfo.RuntimeProcesses.Count -gt 0 -or $runtimeInfo.InstalledRuntimes.Count -gt 0)
 $hasRscApp  = ($fileIndicators | Where-Object { $_.HasRscPackages -or $_.TextRscHitPath }).Count -gt 0
 
 if ($hasRscApp -or $hasRuntime -or $localPorts.Count -gt 0 -or $remoteConns.Count -gt 0) {
-    Write-Host "Den här servern har indikatorer på JS-runtime och/eller Next/RSC-relaterad kod." -ForegroundColor Yellow
-    Write-Host "→ Gå vidare med analys av versioner (react-server-dom-* / next) och prata med dev-teamet." -ForegroundColor Yellow
+    Write-Host "This server shows indicators of JS runtimes and/or Next/RSC-related code." -ForegroundColor Yellow
+    Write-Host "→ Follow up with version analysis (react-server-dom-* / next) and application/development teams." -ForegroundColor Yellow
 } else {
-    Write-Host "Inga tydliga indikatorer på att den här servern kör React Server Components / Next.js." -ForegroundColor Green
-    Write-Host "Observera att RSC kan finnas på andra servrar (containers, interna backends) som den här pratar med indirekt." -ForegroundColor DarkYellow
+    Write-Host "No obvious indicators that this server runs React Server Components / Next.js." -ForegroundColor Green
+    Write-Host "Note: RSC may still exist on other servers (containers, internal backends) this host talks to indirectly." -ForegroundColor DarkYellow
 }
 
-# Returnera ett objekt om man vill jobba vidare i PowerShell
+# Return a structured object for further processing if needed
 [PSCustomObject]@{
     ComputerName       = $env:COMPUTERNAME
     RuntimeInfo        = $runtimeInfo
