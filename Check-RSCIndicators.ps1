@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Heuristic detector for possible React Server Components (RSC) / Next.js usage on a Windows server.
 
@@ -96,7 +96,7 @@ function Get-JsRuntimeInfo {
                 ParentId    = $p.ParentProcessId
                 ParentName  = if ($parent) { $parent.ProcessName } else { $null }
             }
-        } | Format-Table -AutoSize
+        }
     } else {
         Write-Host "No active node, bun, deno or pm2 processes found." -ForegroundColor Yellow
     }
