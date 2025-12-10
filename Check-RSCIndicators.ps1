@@ -225,16 +225,18 @@ function Get-RscFileIndicators {
             $hasAppDir    = Test-Path (Join-Path $appRoot "app")
 
             $hasNextCfg = (
-                Test-Path (Join-Path $appRoot "next.config.js")  -or
-                Test-Path (Join-Path $appRoot "next.config.mjs") -or
-                Test-Path (Join-Path $appRoot "next.config.ts")
+                (Test-Path (Join-Path $appRoot "next.config.js"))  -or
+                (Test-Path (Join-Path $appRoot "next.config.mjs")) -or
+                (Test-Path (Join-Path $appRoot "next.config.ts"))
             )
 
             # Search for "react-server-dom" text anywhere under app root
             $textHit = $null
             try {
-                $textHit = Select-String -Path (Join-Path $appRoot "*") -Pattern "react-server-dom" -Recurse -ErrorAction SilentlyContinue |
-                           Select-Object -First 1
+                $textHit = Select-String -Path (Join-Path $appRoot "*") `
+                                         -Pattern "react-server-dom" `
+                                         -Recurse -ErrorAction SilentlyContinue `
+                                         | Select-Object -First 1
             }
             catch {
                 $textHit = $null
