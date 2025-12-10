@@ -104,7 +104,10 @@ function Get-JsRuntimeInfo {
         }
     }
 
-    $installed = $installedCli + $installedReg
+    # Combine CLI and registry hits safely even when either side is $null
+    $installed = @()
+    if ($installedCli) { $installed += $installedCli }
+    if ($installedReg) { $installed += $installedReg }
 
     if ($installed.Count -gt 0) {
         Write-Host "Detected runtimes / CLI (PATH and registry):" -ForegroundColor Yellow
